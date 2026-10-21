@@ -93,6 +93,13 @@ def analyze_behavior(track):
     if drowning_frames >= POSSIBLE_FRAMES:
         return "POSSIBLE_DROWNING"
 
+    # [SỬA] Mới (model 3 lớp): người được nhận là "Person out of water" trong phần lớn cửa sổ
+    # thì đang ở trên bờ, không thể đuối nước -> bỏ qua quy tắc bất động bên dưới. Nếu không,
+    # người đứng yên trên thành hồ sẽ bị báo POSSIBLE nhầm.
+    out_of_water_frames = sum(1 for s in track if s["out_of_water"])
+    if out_of_water_frames > len(track) // 2:
+        return "NORMAL_ACTIVITY"
+
     # [SỬA] Chuyển động giờ chỉ là tín hiệu phụ: bất động suốt cả cửa sổ (có thể là đuối nước
     # thụ động, nằm im dưới nước) thì chỉ cảnh báo mức POSSIBLE, không lên HIGH_RISK.
     if len(track) == WINDOW_SIZE and avg_normalized_motion(track) < MOTIONLESS_THRESHOLD:
@@ -108,6 +115,15 @@ def find_drowning_class(model):
         if name.lower() == "drowning":
             return idx
     raise ValueError(f"Model không có lớp 'drowning': {model.names}")
+
+
+# [SỬA] Mới: tìm lớp "Person out of water" (chỉ có ở model 3 lớp train từ dataset
+# "Swimming and Drowning Detection"). Model 2 lớp cũ không có -> trả về None.
+def find_out_of_water_class(model):
+    for idx, name in model.names.items():
+        if "out of water" in name.lower():
+            return idx
+    return None
 
 
 # [SỬA] Mới: README có nhắc chạy trên ảnh nhưng code cũ chỉ hỗ trợ video.
@@ -132,6 +148,7 @@ def run_image(model, source, args):
 
 def run_video(model, source, args):
     drowning_cls = find_drowning_class(model)
+    out_of_water_cls = find_out_of_water_class(model)
 
     # [SỬA] Code cũ mở cv2.VideoCapture nhưng không dùng (model.track tự đọc video). Giờ chỉ mở
     # để kiểm tra nguồn và lấy FPS cho file video đầu ra.
@@ -179,6 +196,8 @@ def run_video(model, source, args):
 
                 memory[pid].append({
                     "drowning": cls == drowning_cls,
+                    # [SỬA] Mới: luôn False với model 2 lớp (out_of_water_cls = None).
+                    "out_of_water": cls == out_of_water_cls,
                     "center": (cx, cy),
                     "height": y2 - y1,
                 })
