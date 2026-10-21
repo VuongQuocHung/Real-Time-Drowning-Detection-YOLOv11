@@ -16,6 +16,8 @@ DATA_YAML = ROOT / "dataset" / "data.yaml"
 # [SỬA] Mới: chỉnh tham số qua dòng lệnh thay vì phải sửa code.
 def parse_args():
     parser = argparse.ArgumentParser(description="Train YOLOv11 drowning detector")
+    # [SỬA] Mới: chọn dataset khác (vd dataset Roboflow tải về) mà không cần copy vào repo.
+    parser.add_argument("--data", default=str(DATA_YAML), help="đường dẫn file data.yaml")
     parser.add_argument("--weights", default="yolo11n.pt", help="model khởi tạo (vd yolo11n.pt, yolo11s.pt)")
     parser.add_argument("--epochs", type=int, default=80)
     parser.add_argument("--imgsz", type=int, default=640)
@@ -35,12 +37,16 @@ def main():
     batch = args.batch or (8 if device == "cpu" else 16)
     print(f"Device: {device}, batch: {batch}")
 
+    # [SỬA] Đổi sang đường dẫn tuyệt đối (lý do giống DATA_YAML ở trên).
+    data_yaml = Path(args.data).resolve()
+    print(f"Dataset: {data_yaml}")
+
     # [SỬA] Dùng file yolo11n.pt có sẵn trong repo nếu có; nếu không thì để Ultralytics tự tải.
     weights = ROOT / args.weights
     model = YOLO(str(weights) if weights.exists() else args.weights)
 
     model.train(
-        data=str(DATA_YAML),
+        data=str(data_yaml),
         epochs=args.epochs,
         imgsz=args.imgsz,
         batch=batch,
@@ -59,7 +65,7 @@ def main():
     best_path = Path(model.trainer.best)
     best_model = YOLO(str(best_path))
     metrics = best_model.val(
-        data=str(DATA_YAML),
+        data=str(data_yaml),
         split="test",
         imgsz=args.imgsz,
         batch=batch,
